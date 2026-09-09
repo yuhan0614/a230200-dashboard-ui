@@ -132,12 +132,11 @@ const API_BASE = "https://a230200-api.fly.dev";
 
 // ── 活動分類 ────────────────────────────────────────────────
 // 活動名稱的第一段就是產品線（保健_/家寢_/護具_…），照前綴分頁。
-// 對不上的（KOL、專案、測試）落到「其他」，不會被算進保健或家寢。
+// 對不上的（KOL、專案、測試）歸「其他」，兩個分頁都不會算到；
+// 該區間真的有這種花費時，頁面上方會出現提示。
 const CATEGORIES = [
-  { key: "all",  label: "📊 全部" },
   { key: "保健", label: "💊 保健" },
   { key: "家寢", label: "🛏 家寢" },
-  { key: "其他", label: "📦 其他" },
 ];
 function categoryOf(name) {
   const n = name || "";
@@ -256,7 +255,7 @@ const REPORTS = {
 
 let DATA = { trend: [], adset: [], ad: [], age: [], gender: [] };
 let THUMBS = {};
-let activeCat = "all";
+let activeCat = "保健";
 const sortState = {};
 const charts = {};
 
@@ -320,7 +319,6 @@ function switchCat(key) {
   render();
 }
 function inCat(rows) {
-  if (activeCat === "all") return rows;
   return rows.filter(r => categoryOf(r.campaign_name) === activeCat);
 }
 
@@ -454,7 +452,7 @@ function render() {
   CATEGORIES.forEach(c => {
     const el = document.getElementById("cnt-" + c.key);
     if (!el) return;
-    const v = c.key === "all" ? Object.values(catSpend).reduce((a, b) => a + b, 0) : (catSpend[c.key] || 0);
+    const v = catSpend[c.key] || 0;
     el.textContent = v ? "$" + nf.format(Math.round(v)) : "";
   });
 
@@ -500,7 +498,7 @@ function render() {
   const ageRows = aggregate(ages, r => r.age).filter(nonEmpty);
 
   document.getElementById("main").innerHTML = `
-    ${activeCat === "all" && catSpend["其他"] ? `<div class="note">「其他」分類（KOL／專案／未依 保健_ 家寢_ 命名的活動）花費 $${nf.format(Math.round(catSpend["其他"]))}，已包含在全部，但不會計入保健或家寢分頁。</div>` : ""}
+    ${catSpend["其他"] ? `<div class="note">此區間另有未依 <b>保健_</b> / <b>家寢_</b> 命名的活動（KOL、專案等）花費 $${nf.format(Math.round(catSpend["其他"]))}，兩個分頁都沒有計入，跟帳戶總花費對帳時要注意。</div>` : ""}
     <div class="summary-grid">${cards}</div>
 
     <div class="chart-card">
