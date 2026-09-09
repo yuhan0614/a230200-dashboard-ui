@@ -51,11 +51,9 @@
   .c-green .val { color: #52c41a; }
   .c-dark .val { color: #1a1a2e; }
 
-  .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
   .chart-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.07); margin-bottom: 20px; }
   .chart-card h3 { font-size: 15px; font-weight: 600; color: #333; margin-bottom: 14px; }
   .chart-wrap { position: relative; height: 260px; }
-  .chart-wrap.sm { height: 230px; }
 
   .table-card { background: white; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.07); overflow: hidden; margin-bottom: 20px; }
   .table-header { padding: 14px 20px; border-bottom: 1px solid #f0f2f5; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
@@ -82,7 +80,6 @@
   .empty { text-align: center; padding: 60px; color: #bbb; }
   .note { font-size: 12px; color: #999; background: #fffbe6; border: 1px solid #ffe58f; border-radius: 8px; padding: 8px 12px; margin-bottom: 16px; }
 
-  @media (max-width: 900px) { .charts-row { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
@@ -104,7 +101,7 @@
     <div class="preset-btns">
       <button class="preset-btn" onclick="applyPreset(1)">今天</button>
       <button class="preset-btn" onclick="applyPresetYesterday()">昨天</button>
-      <button class="preset-btn" onclick="applyPreset(7)">近7天</button>
+      <button class="preset-btn" id="presetDefault" onclick="applyPreset(7)">近7天</button>
       <button class="preset-btn" onclick="applyPreset(30)">近30天</button>
       <button class="preset-btn" onclick="applyPreset(90)">近90天</button>
       <button class="preset-btn" onclick="applyPresetMonth()">本月</button>
@@ -397,48 +394,6 @@ function drawTrend(daily) {
 }
 
 const GENDER_LABEL = { female: "女性", male: "男性", unknown: "未知" };
-const GENDER_COLOR = { female: "#eb2f96", male: "#1677ff", unknown: "#bbb" };
-
-function drawGender(rows) {
-  drawChart("chartGender", {
-    type: "doughnut",
-    data: {
-      labels: rows.map(r => GENDER_LABEL[r._key] || r._key),
-      datasets: [{ data: rows.map(r => r.spend), backgroundColor: rows.map(r => GENDER_COLOR[r._key] || "#999"), borderWidth: 0 }],
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false, cutout: "58%",
-      plugins: {
-        legend: { position: "bottom", labels: { boxWidth: 12, font: { size: 11 } } },
-        tooltip: { callbacks: { label: c => `${c.label}：$${nf.format(Math.round(c.parsed))}` } },
-      },
-    },
-  });
-}
-
-function drawAge(rows) {
-  const sorted = rows.slice().sort((a, b) => String(a._key).localeCompare(String(b._key)));
-  drawChart("chartAge", {
-    type: "bar",
-    data: {
-      labels: sorted.map(r => r._key),
-      datasets: [
-        { label: "花費", data: sorted.map(r => r.spend), backgroundColor: "rgba(229,50,110,0.6)", borderRadius: 4, yAxisID: "y" },
-        { label: "Value", data: sorted.map(r => r.value), backgroundColor: "rgba(22,119,255,0.6)", borderRadius: 4, yAxisID: "y" },
-        { label: "ROAS", type: "line", data: sorted.map(r => r.roas), borderColor: "#52c41a", backgroundColor: "#52c41a", tension: 0.3, pointRadius: 3, borderWidth: 2, yAxisID: "y1" },
-      ],
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      scales: {
-        y:  { position: "left", beginAtZero: true, ticks: MONEY_TICK },
-        y1: { position: "right", beginAtZero: true, grid: { drawOnChartArea: false }, title: { display: true, text: "ROAS" } },
-      },
-      plugins: { legend: { position: "bottom", labels: { boxWidth: 12, font: { size: 11 } } } },
-    },
-  });
-}
-
 // ── 主渲染 ──────────────────────────────────────────────────
 function esc(s) {
   return String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -518,18 +473,6 @@ function render() {
         return `<span class="thumb-cell">${img}<span><span class="cell-name">${esc(r.ad_name || "(未命名)")}</span><span class="cell-sub">${esc(r.campaign_name || "")}</span></span></span>`;
       }, "spend", "同名素材已合併")}
 
-    <div class="charts-row">
-      <div class="chart-card" style="margin-bottom:0">
-        <h3>性別花費分布</h3>
-        <div class="chart-wrap sm"><canvas id="chartGender"></canvas></div>
-      </div>
-      <div class="chart-card" style="margin-bottom:0">
-        <h3>年齡成效</h3>
-        <div class="chart-wrap sm"><canvas id="chartAge"></canvas></div>
-      </div>
-    </div>
-    <div style="height:20px"></div>
-
     ${renderTable("tblGender", "🚻 性別成效", genderRows, "性別",
       r => `<span class="cell-name">${GENDER_LABEL[r._key] || r._key}</span>`, "spend")}
 
@@ -538,18 +481,16 @@ function render() {
   `;
 
   drawTrend(daily);
-  if (genderRows.length) drawGender(genderRows);
-  if (ageRows.length) drawAge(ageRows);
 }
 
 // ── 啟動 ───────────────────────────────────────────────────
 buildTabs();
 (function init() {
   const to = new Date(), from = new Date();
-  from.setDate(to.getDate() - 29);
+  from.setDate(to.getDate() - 6);
   document.getElementById("dateFrom").value = ymd(from);
   document.getElementById("dateTo").value = ymd(to);
-  document.querySelectorAll(".preset-btn")[3].classList.add("active");
+  document.getElementById("presetDefault").classList.add("active");
   loadAll(false);
 })();
 </script>
