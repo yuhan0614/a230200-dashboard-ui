@@ -342,9 +342,9 @@ function setSort(id, key) {
   render();
 }
 
-function renderTable(id, title, rows, nameHeader, nameCell, defaultKey, hint) {
+function renderTable(id, title, rows, nameHeader, nameCell, defaultKey, hint, defaultAsc) {
   if (!rows.length) return `<div class="table-card"><div class="table-header"><h3>${title}</h3></div><div class="empty">此區間沒有資料</div></div>`;
-  const s = sortState[id] || (sortState[id] = { key: defaultKey, asc: false });
+  const s = sortState[id] || (sortState[id] = { key: defaultKey, asc: !!defaultAsc });
   const sorted = sortRows(id, rows, defaultKey);
   const maxSpend = Math.max(...rows.map(r => r.spend), 1);
   const tot = total(rows);
@@ -502,8 +502,10 @@ function render() {
   const adsetRows = aggregate(adsets, r => (r.adset_name || "(未命名)") + " ⟨" + (r.campaign_name || "") + "⟩",
     r => ({ adset_name: r.adset_name, campaign_name: r.campaign_name }));
   const adRows = aggregate(ads, r => r.ad_name || "(未命名)", r => ({ ad_name: r.ad_name, campaign_name: r.campaign_name }));
-  const genderRows = aggregate(genders, r => r.gender);
-  const ageRows = aggregate(ages, r => r.age);
+  // Meta 的 age / gender 拆分會回一列全 0 的 Unknown，濾掉才不會佔一行。
+  const nonEmpty = r => r.spend > 0 || r.impressions > 0;
+  const genderRows = aggregate(genders, r => r.gender).filter(nonEmpty);
+  const ageRows = aggregate(ages, r => r.age).filter(nonEmpty);
 
   document.getElementById("main").innerHTML = `
     ${activeCat === "all" && catSpend["其他"] ? `<div class="note">「其他」分類（KOL／專案／未依 保健_ 家寢_ 命名的活動）花費 $${nf.format(Math.round(catSpend["其他"]))}，已包含在全部，但不會計入保健或家寢分頁。</div>` : ""}
@@ -542,7 +544,7 @@ function render() {
       r => `<span class="cell-name">${GENDER_LABEL[r._key] || r._key}</span>`, "spend")}
 
     ${renderTable("tblAge", "🎂 年齡成效", ageRows, "年齡",
-      r => `<span class="cell-name">${esc(r._key)}</span>`, "_key")}
+      r => `<span class="cell-name">${esc(r._key)}</span>`, "_key", "", true)}
   `;
 
   drawTrend(daily);
