@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SS2_A230200 成效儀表板</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang TC', sans-serif; background: #f0f2f5; color: #1a1a2e; font-size: 14px; }
+
+  .top-nav { position: sticky; top: 0; z-index: 50; }
+  .header { background: linear-gradient(135deg, #e5326e 0%, #b0164d 100%); color: white; padding: 18px 24px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+  .header-title h1 { font-size: 20px; font-weight: 700; }
+  .header-title p { font-size: 12px; opacity: 0.85; margin-top: 3px; }
+  .header-right { font-size: 12px; opacity: 0.9; text-align: right; line-height: 1.7; }
+
+  .tabs { background: white; border-bottom: 1px solid #e4e6ea; padding: 0 24px; display: flex; }
+  .tab-btn { padding: 13px 22px; font-size: 14px; font-weight: 500; color: #888; border: none; background: none; cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.15s; }
+  .tab-btn:hover { color: #e5326e; }
+  .tab-btn.active { color: #e5326e; border-bottom-color: #e5326e; font-weight: 700; }
+  .tab-btn .cnt { font-size: 11px; color: #bbb; margin-left: 6px; font-weight: 500; }
+
+  .controls { background: white; border-bottom: 1px solid #e4e6ea; padding: 12px 24px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .preset-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+  .preset-btn { padding: 5px 14px; border: 1.5px solid #e4e6ea; border-radius: 20px; background: white; font-size: 12px; cursor: pointer; color: #555; transition: all 0.15s; font-weight: 500; }
+  .preset-btn:hover { background: #ffe9f0; border-color: #e5326e; color: #e5326e; }
+  .preset-btn.active { background: #e5326e; color: white; border-color: #e5326e; }
+  .date-inputs { display: flex; align-items: center; gap: 6px; }
+  .date-inputs input { padding: 5px 10px; border: 1.5px solid #e4e6ea; border-radius: 8px; font-size: 12px; outline: none; font-family: inherit; }
+  .date-inputs input:focus { border-color: #e5326e; }
+  .fetch-btn { padding: 7px 18px; background: #e5326e; color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+  .fetch-btn:hover { background: #b0164d; }
+  .fetch-btn:disabled { background: #bbb; cursor: not-allowed; }
+  .status-text { font-size: 12px; color: #888; }
+  .status-text.ok { color: #52c41a; }
+  .status-text.err { color: #f5222d; }
+
+  .main { padding: 20px 24px 60px; max-width: 1600px; margin: 0 auto; }
+
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .sc { background: white; border-radius: 12px; padding: 14px 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.07); }
+  .sc .lbl { font-size: 11px; color: #65676b; font-weight: 600; letter-spacing: 0.3px; margin-bottom: 6px; }
+  .sc .val { font-size: 21px; font-weight: 700; }
+  .sc .sub { font-size: 11px; color: #aaa; margin-top: 3px; }
+  .c-blue .val { color: #1677ff; }
+  .c-orange .val { color: #fa8c16; }
+  .c-purple .val { color: #722ed1; }
+  .c-teal .val { color: #13c2c2; }
+  .c-pink .val { color: #eb2f96; }
+  .c-green .val { color: #52c41a; }
+  .c-dark .val { color: #1a1a2e; }
+
+  .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+  .chart-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.07); margin-bottom: 20px; }
+  .chart-card h3 { font-size: 15px; font-weight: 600; color: #333; margin-bottom: 14px; }
+  .chart-wrap { position: relative; height: 260px; }
+  .chart-wrap.sm { height: 230px; }
+
+  .table-card { background: white; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.07); overflow: hidden; margin-bottom: 20px; }
+  .table-header { padding: 14px 20px; border-bottom: 1px solid #f0f2f5; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .table-header h3 { font-size: 15px; font-weight: 600; }
+  .table-header .hint { font-size: 12px; color: #aaa; font-weight: 400; }
+  .table-wrap { overflow-x: auto; max-height: 640px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { background: #f7f8fa; font-size: 11px; font-weight: 700; letter-spacing: 0.3px; color: #65676b; padding: 12px 10px; text-align: right; white-space: nowrap; vertical-align: bottom; min-width: 74px; border-bottom: 1px solid #e4e6ea; cursor: pointer; user-select: none; position: sticky; top: 0; z-index: 2; }
+  th:hover { color: #e5326e; }
+  th.sorted::after { content: ' \25BC'; font-size: 9px; }
+  th.sorted.asc::after { content: ' \25B2'; }
+  th:first-child { text-align: left; min-width: 220px; left: 0; z-index: 4; }
+  td { padding: 9px 12px; text-align: right; border-bottom: 1px solid #f5f5f5; font-size: 13px; white-space: nowrap; }
+  td:first-child { text-align: left; position: sticky; left: 0; background: white; z-index: 1; }
+  tbody tr:hover td { background: #fff0f5; }
+  tfoot td { font-weight: 700; background: #fafbfc; border-top: 2px solid #e4e6ea; border-bottom: none; }
+  tfoot td:first-child { background: #fafbfc; }
+  .na { color: #ddd; }
+  .cell-name { font-weight: 600; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+  .cell-sub { font-size: 11px; color: #aaa; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; margin-top: 2px; }
+  .thumb-cell { display: flex; align-items: center; gap: 10px; }
+  .thumb { width: 44px; height: 44px; border-radius: 6px; object-fit: cover; background: #f0f2f5; flex-shrink: 0; }
+  .spend-bar-wrap { display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
+  .spend-bar { height: 5px; border-radius: 3px; background: #e5326e; opacity: 0.5; min-width: 2px; }
+
+  .empty { text-align: center; padding: 60px; color: #bbb; }
+  .note { font-size: 12px; color: #999; background: #fffbe6; border: 1px solid #ffe58f; border-radius: 8px; padding: 8px 12px; margin-bottom: 16px; }
+
+  @media (max-width: 900px) { .charts-row { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<div class="top-nav">
+  <div class="header">
+    <div class="header-title">
+      <h1>Meta 成效儀表板</h1>
+      <p>SS2_A230200_TW（CPAS-MOMO）· 帳號 818610736281333 · TWD</p>
+    </div>
+    <div class="header-right">
+      最後更新：<span id="lastUpdate">—</span>
+    </div>
+  </div>
+
+  <div class="tabs" id="catTabs"></div>
+
+  <div class="controls">
+    <div class="preset-btns">
+      <button class="preset-btn" onclick="applyPreset(1)">今天</button>
+      <button class="preset-btn" onclick="applyPresetYesterday()">昨天</button>
+      <button class="preset-btn" onclick="applyPreset(7)">近7天</button>
+      <button class="preset-btn" onclick="applyPreset(30)">近30天</button>
+      <button class="preset-btn" onclick="applyPreset(90)">近90天</button>
+      <button class="preset-btn" onclick="applyPresetMonth()">本月</button>
+      <button class="preset-btn" onclick="applyPresetLastMonth()">上月</button>
+    </div>
+    <div class="date-inputs">
+      <input type="date" id="dateFrom" onchange="clearPreset(); loadAll(false)">
+      <span style="color:#bbb">至</span>
+      <input type="date" id="dateTo" onchange="clearPreset(); loadAll(false)">
+    </div>
+    <button class="fetch-btn" id="fetchBtn" onclick="loadAll(true)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4"/></svg>
+      更新資料
+    </button>
+    <span class="status-text" id="statusText"></span>
+  </div>
+</div>
+
+<div class="main" id="main">
+  <div class="empty">載入中…</div>
+</div>
+
+<script>
+const API_BASE = "https://a230200-api.fly.dev";
+
+// ── 活動分類 ────────────────────────────────────────────────
+// 活動名稱的第一段就是產品線（保健_/家寢_/護具_…），照前綴分頁。
+// 對不上的（KOL、專案、測試）落到「其他」，不會被算進保健或家寢。
+const CATEGORIES = [
+  { key: "all",  label: "📊 全部" },
+  { key: "保健", label: "💊 保健" },
+  { key: "家寢", label: "🛏 家寢" },
+  { key: "其他", label: "📦 其他" },
+];
+function categoryOf(name) {
+  const n = name || "";
+  if (n.startsWith("家寢")) return "家寢";
+  if (n.startsWith("保健") || n.startsWith("護具")) return "保健";
+  return "其他";
+}
+
+// ── 指標欄位定義 ─────────────────────────────────────────────
+const METRICS = [
+  { key: "spend",       label: "花費",       fmt: "money", bar: true },
+  { key: "impressions", label: "曝光",       fmt: "int" },
+  { key: "clicks",      label: "點擊(all)",  fmt: "int" },
+  { key: "link_clicks", label: "連結點擊",   fmt: "int" },
+  { key: "vc",          label: "VC",         fmt: "int" },
+  { key: "atc",         label: "ATC",        fmt: "int" },
+  { key: "purchase",    label: "Purchase",   fmt: "int" },
+  { key: "value",       label: "Value",      fmt: "money" },
+  { key: "cpm",         label: "CPM",        fmt: "dec2" },
+  { key: "cpc",         label: "CPC(all)",   fmt: "dec2" },
+  { key: "cpl",         label: "CPL",        fmt: "dec2" },
+  { key: "roas",        label: "ROAS",       fmt: "dec2" },
+  { key: "aov",         label: "客單價",     fmt: "money" },
+];
+
+const SUM_KEYS = ["spend", "impressions", "clicks", "link_clicks", "vc", "atc", "purchase", "value"];
+
+function blank() { const o = {}; SUM_KEYS.forEach(k => o[k] = 0); return o; }
+
+function derive(o) {
+  o.cpm  = o.impressions ? o.spend / o.impressions * 1000 : 0;
+  o.cpc  = o.clicks      ? o.spend / o.clicks : 0;
+  o.cpl  = o.link_clicks ? o.spend / o.link_clicks : 0;
+  o.ctr  = o.impressions ? o.clicks / o.impressions * 100 : 0;
+  o.roas = o.spend       ? o.value / o.spend : 0;
+  o.aov  = o.purchase    ? o.value / o.purchase : 0;
+  return o;
+}
+
+function aggregate(rows, keyFn, metaFn) {
+  const map = new Map();
+  rows.forEach(r => {
+    const k = keyFn(r);
+    if (k === null || k === undefined) return;
+    if (!map.has(k)) map.set(k, Object.assign(blank(), { _key: k }, metaFn ? metaFn(r) : {}));
+    const o = map.get(k);
+    SUM_KEYS.forEach(m => o[m] += (Number(r[m]) || 0));
+  });
+  return [...map.values()].map(derive);
+}
+
+function total(rows) {
+  const o = blank();
+  rows.forEach(r => SUM_KEYS.forEach(m => o[m] += (Number(r[m]) || 0)));
+  return derive(o);
+}
+
+// ── 格式化 ─────────────────────────────────────────────────
+const nf = new Intl.NumberFormat("zh-TW");
+function fmt(v, kind) {
+  if (v === null || v === undefined || isNaN(v)) return '<span class="na">—</span>';
+  if (kind === "int")   return nf.format(Math.round(v));
+  if (kind === "money") return v === 0 ? '<span class="na">—</span>' : "$" + nf.format(Math.round(v));
+  if (kind === "dec2")  return v === 0 ? '<span class="na">—</span>' : v.toFixed(2);
+  if (kind === "pct")   return v.toFixed(2) + "%";
+  return v;
+}
+
+// ── 日期 ───────────────────────────────────────────────────
+function ymd(d) {
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+function setPresetActive(btn) {
+  document.querySelectorAll(".preset-btn").forEach(b => b.classList.remove("active"));
+  if (btn) btn.classList.add("active");
+}
+function clearPreset() { setPresetActive(null); }
+function applyPreset(days) {
+  const to = new Date(), from = new Date();
+  from.setDate(to.getDate() - (days - 1));
+  document.getElementById("dateFrom").value = ymd(from);
+  document.getElementById("dateTo").value = ymd(to);
+  setPresetActive(event && event.target.closest(".preset-btn"));
+  loadAll(false);
+}
+function applyPresetYesterday() {
+  const d = new Date(); d.setDate(d.getDate() - 1);
+  document.getElementById("dateFrom").value = ymd(d);
+  document.getElementById("dateTo").value = ymd(d);
+  setPresetActive(event && event.target.closest(".preset-btn"));
+  loadAll(false);
+}
+function applyPresetMonth() {
+  const now = new Date();
+  document.getElementById("dateFrom").value = ymd(new Date(now.getFullYear(), now.getMonth(), 1));
+  document.getElementById("dateTo").value = ymd(now);
+  setPresetActive(event && event.target.closest(".preset-btn"));
+  loadAll(false);
+}
+function applyPresetLastMonth() {
+  const now = new Date();
+  document.getElementById("dateFrom").value = ymd(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+  document.getElementById("dateTo").value = ymd(new Date(now.getFullYear(), now.getMonth(), 0));
+  setPresetActive(event && event.target.closest(".preset-btn"));
+  loadAll(false);
+}
+
+// ── 資料抓取 ────────────────────────────────────────────────
+const REPORTS = {
+  trend:  { level: "campaign", time_increment: "1" },
+  adset:  { level: "adset" },
+  ad:     { level: "ad" },
+  age:    { level: "campaign", breakdowns: "age" },
+  gender: { level: "campaign", breakdowns: "gender" },
+};
+
+let DATA = { trend: [], adset: [], ad: [], age: [], gender: [] };
+let THUMBS = {};
+let activeCat = "all";
+const sortState = {};
+const charts = {};
+
+async function fetchReport(name, since, until, force) {
+  const cfg = REPORTS[name];
+  const p = new URLSearchParams({ since, until, level: cfg.level });
+  if (cfg.time_increment) p.set("time_increment", cfg.time_increment);
+  if (cfg.breakdowns) p.set("breakdowns", cfg.breakdowns);
+  if (force) p.set("force", "true");
+  const r = await fetch(`${API_BASE}/api/insights?${p}`);
+  const j = await r.json();
+  if (j.errors && j.errors.length) throw new Error(j.errors[0]);
+  return j;
+}
+
+async function loadAll(force) {
+  const since = document.getElementById("dateFrom").value;
+  const until = document.getElementById("dateTo").value;
+  if (!since || !until) return;
+
+  const btn = document.getElementById("fetchBtn");
+  const st = document.getElementById("statusText");
+  btn.disabled = true;
+  st.className = "status-text";
+  st.textContent = "載入中…";
+
+  try {
+    const names = Object.keys(REPORTS);
+    const results = await Promise.all(names.map(n => fetchReport(n, since, until, force)));
+    names.forEach((n, i) => DATA[n] = results[i].data || []);
+    document.getElementById("lastUpdate").textContent = results[0].updated || "—";
+    st.className = "status-text ok";
+    st.textContent = results.every(r => r.cached) ? "已載入（快取）" : "已載入";
+
+    if (!Object.keys(THUMBS).length) {
+      fetch(`${API_BASE}/api/ad_urls`).then(r => r.json()).then(j => {
+        THUMBS = j.data || {};
+        render();
+      }).catch(() => {});
+    }
+    render();
+  } catch (e) {
+    st.className = "status-text err";
+    st.textContent = "載入失敗：" + e.message;
+    document.getElementById("main").innerHTML = `<div class="empty">載入失敗：${e.message}</div>`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ── 分頁 ───────────────────────────────────────────────────
+function buildTabs() {
+  const el = document.getElementById("catTabs");
+  el.innerHTML = CATEGORIES.map(c =>
+    `<button class="tab-btn${c.key === activeCat ? " active" : ""}" data-cat="${c.key}" onclick="switchCat('${c.key}')">${c.label}<span class="cnt" id="cnt-${c.key}"></span></button>`
+  ).join("");
+}
+function switchCat(key) {
+  activeCat = key;
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.cat === key));
+  render();
+}
+function inCat(rows) {
+  if (activeCat === "all") return rows;
+  return rows.filter(r => categoryOf(r.campaign_name) === activeCat);
+}
+
+// ── 表格 ───────────────────────────────────────────────────
+function sortRows(id, rows, defaultKey) {
+  const s = sortState[id] || (sortState[id] = { key: defaultKey, asc: false });
+  return rows.slice().sort((a, b) => {
+    const va = a[s.key], vb = b[s.key];
+    if (typeof va === "string" || typeof vb === "string")
+      return s.asc ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
+    return s.asc ? (va - vb) : (vb - va);
+  });
+}
+function setSort(id, key) {
+  const s = sortState[id] || (sortState[id] = { key, asc: false });
+  if (s.key === key) s.asc = !s.asc; else { s.key = key; s.asc = false; }
+  render();
+}
+
+function renderTable(id, title, rows, nameHeader, nameCell, defaultKey, hint) {
+  if (!rows.length) return `<div class="table-card"><div class="table-header"><h3>${title}</h3></div><div class="empty">此區間沒有資料</div></div>`;
+  const s = sortState[id] || (sortState[id] = { key: defaultKey, asc: false });
+  const sorted = sortRows(id, rows, defaultKey);
+  const maxSpend = Math.max(...rows.map(r => r.spend), 1);
+  const tot = total(rows);
+
+  const head = `<th class="${s.key === "_key" ? "sorted " + (s.asc ? "asc" : "") : ""}" onclick="setSort('${id}','_key')">${nameHeader}</th>` +
+    METRICS.map(m => `<th class="${s.key === m.key ? "sorted " + (s.asc ? "asc" : "") : ""}" onclick="setSort('${id}','${m.key}')">${m.label}</th>`).join("");
+
+  const body = sorted.map(r => "<tr>" + `<td>${nameCell(r)}</td>` + METRICS.map(m => {
+    if (m.bar) {
+      const w = Math.round(r.spend / maxSpend * 42);
+      return `<td><span class="spend-bar-wrap"><span class="spend-bar" style="width:${w}px"></span>${fmt(r[m.key], m.fmt)}</span></td>`;
+    }
+    return `<td>${fmt(r[m.key], m.fmt)}</td>`;
+  }).join("") + "</tr>").join("");
+
+  const foot = "<tr><td>合計</td>" + METRICS.map(m => `<td>${fmt(tot[m.key], m.fmt)}</td>`).join("") + "</tr>";
+
+  return `<div class="table-card">
+    <div class="table-header"><h3>${title}</h3>${hint ? `<span class="hint">${hint}</span>` : ""}</div>
+    <div class="table-wrap"><table>
+      <thead><tr>${head}</tr></thead>
+      <tbody>${body}</tbody>
+      <tfoot>${foot}</tfoot>
+    </table></div>
+  </div>`;
+}
+
+// ── 圖表 ───────────────────────────────────────────────────
+function drawChart(id, config) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (charts[id]) charts[id].destroy();
+  charts[id] = new Chart(el, config);
+}
+
+const MONEY_TICK = { callback: v => "$" + nf.format(v) };
+
+function drawTrend(daily) {
+  drawChart("chartTrend", {
+    type: "bar",
+    data: {
+      labels: daily.map(d => d._key.slice(5)),
+      datasets: [
+        { label: "花費", data: daily.map(d => d.spend), backgroundColor: "rgba(229,50,110,0.55)", borderRadius: 3, yAxisID: "y", order: 3 },
+        { label: "Value", type: "line", data: daily.map(d => d.value), borderColor: "#1677ff", backgroundColor: "#1677ff", tension: 0.3, pointRadius: 2, borderWidth: 2, yAxisID: "y", order: 2 },
+        { label: "ROAS", type: "line", data: daily.map(d => d.roas), borderColor: "#52c41a", backgroundColor: "#52c41a", tension: 0.3, pointRadius: 2, borderWidth: 2, borderDash: [4, 3], yAxisID: "y1", order: 1 },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      scales: {
+        y:  { position: "left",  beginAtZero: true, ticks: MONEY_TICK, title: { display: true, text: "花費 / Value" } },
+        y1: { position: "right", beginAtZero: true, grid: { drawOnChartArea: false }, title: { display: true, text: "ROAS" } },
+        x:  { ticks: { maxRotation: 0, autoSkipPadding: 12 } },
+      },
+      plugins: { legend: { position: "bottom", labels: { boxWidth: 12, font: { size: 11 } } } },
+    },
+  });
+}
+
+const GENDER_LABEL = { female: "女性", male: "男性", unknown: "未知" };
+const GENDER_COLOR = { female: "#eb2f96", male: "#1677ff", unknown: "#bbb" };
+
+function drawGender(rows) {
+  drawChart("chartGender", {
+    type: "doughnut",
+    data: {
+      labels: rows.map(r => GENDER_LABEL[r._key] || r._key),
+      datasets: [{ data: rows.map(r => r.spend), backgroundColor: rows.map(r => GENDER_COLOR[r._key] || "#999"), borderWidth: 0 }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: "58%",
+      plugins: {
+        legend: { position: "bottom", labels: { boxWidth: 12, font: { size: 11 } } },
+        tooltip: { callbacks: { label: c => `${c.label}：$${nf.format(Math.round(c.parsed))}` } },
+      },
+    },
+  });
+}
+
+function drawAge(rows) {
+  const sorted = rows.slice().sort((a, b) => String(a._key).localeCompare(String(b._key)));
+  drawChart("chartAge", {
+    type: "bar",
+    data: {
+      labels: sorted.map(r => r._key),
+      datasets: [
+        { label: "花費", data: sorted.map(r => r.spend), backgroundColor: "rgba(229,50,110,0.6)", borderRadius: 4, yAxisID: "y" },
+        { label: "Value", data: sorted.map(r => r.value), backgroundColor: "rgba(22,119,255,0.6)", borderRadius: 4, yAxisID: "y" },
+        { label: "ROAS", type: "line", data: sorted.map(r => r.roas), borderColor: "#52c41a", backgroundColor: "#52c41a", tension: 0.3, pointRadius: 3, borderWidth: 2, yAxisID: "y1" },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        y:  { position: "left", beginAtZero: true, ticks: MONEY_TICK },
+        y1: { position: "right", beginAtZero: true, grid: { drawOnChartArea: false }, title: { display: true, text: "ROAS" } },
+      },
+      plugins: { legend: { position: "bottom", labels: { boxWidth: 12, font: { size: 11 } } } },
+    },
+  });
+}
+
+// ── 主渲染 ──────────────────────────────────────────────────
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+function render() {
+  // 分頁上的花費占比
+  const allTrend = DATA.trend;
+  const catSpend = {};
+  allTrend.forEach(r => { const c = categoryOf(r.campaign_name); catSpend[c] = (catSpend[c] || 0) + r.spend; });
+  CATEGORIES.forEach(c => {
+    const el = document.getElementById("cnt-" + c.key);
+    if (!el) return;
+    const v = c.key === "all" ? Object.values(catSpend).reduce((a, b) => a + b, 0) : (catSpend[c.key] || 0);
+    el.textContent = v ? "$" + nf.format(Math.round(v)) : "";
+  });
+
+  const trend  = inCat(DATA.trend);
+  const adsets = inCat(DATA.adset);
+  const ads    = inCat(DATA.ad);
+  const ages   = inCat(DATA.age);
+  const genders = inCat(DATA.gender);
+
+  if (!trend.length && !adsets.length) {
+    document.getElementById("main").innerHTML = `<div class="empty">此區間 / 此分類沒有資料</div>`;
+    return;
+  }
+
+  const tot = total(trend);
+  const daily = aggregate(trend, r => r.date_start).sort((a, b) => a._key.localeCompare(b._key));
+
+  const cards = [
+    ["花費", fmt(tot.spend, "money"), "c-pink", ""],
+    ["曝光", fmt(tot.impressions, "int"), "c-dark", ""],
+    ["點擊(all)", fmt(tot.clicks, "int"), "c-dark", "CTR " + tot.ctr.toFixed(2) + "%"],
+    ["連結點擊", fmt(tot.link_clicks, "int"), "c-dark", ""],
+    ["VC", fmt(tot.vc, "int"), "c-teal", ""],
+    ["ATC", fmt(tot.atc, "int"), "c-orange", ""],
+    ["Purchase", fmt(tot.purchase, "int"), "c-purple", ""],
+    ["Value", fmt(tot.value, "money"), "c-blue", ""],
+    ["CPM", fmt(tot.cpm, "dec2"), "c-dark", ""],
+    ["CPC(all)", fmt(tot.cpc, "dec2"), "c-dark", ""],
+    ["CPL", fmt(tot.cpl, "dec2"), "c-dark", "連結點擊成本"],
+    ["ROAS", fmt(tot.roas, "dec2"), "c-green", ""],
+    ["客單價", fmt(tot.aov, "money"), "c-purple", ""],
+  ].map(([lbl, val, cls, sub]) =>
+    `<div class="sc ${cls}"><div class="lbl">${lbl}</div><div class="val">${val}</div>${sub ? `<div class="sub">${sub}</div>` : ""}</div>`
+  ).join("");
+
+  const dailyRows = daily.map(d => Object.assign({}, d));
+  const adsetRows = aggregate(adsets, r => (r.adset_name || "(未命名)") + " ⟨" + (r.campaign_name || "") + "⟩",
+    r => ({ adset_name: r.adset_name, campaign_name: r.campaign_name }));
+  const adRows = aggregate(ads, r => r.ad_name || "(未命名)", r => ({ ad_name: r.ad_name, campaign_name: r.campaign_name }));
+  const genderRows = aggregate(genders, r => r.gender);
+  const ageRows = aggregate(ages, r => r.age);
+
+  document.getElementById("main").innerHTML = `
+    ${activeCat === "all" && catSpend["其他"] ? `<div class="note">「其他」分類（KOL／專案／未依 保健_ 家寢_ 命名的活動）花費 $${nf.format(Math.round(catSpend["其他"]))}，已包含在全部，但不會計入保健或家寢分頁。</div>` : ""}
+    <div class="summary-grid">${cards}</div>
+
+    <div class="chart-card">
+      <h3>每日成效趨勢</h3>
+      <div class="chart-wrap"><canvas id="chartTrend"></canvas></div>
+    </div>
+
+    ${renderTable("tblDaily", "📅 每日成效", dailyRows, "日期", r => `<span class="cell-name">${r._key}</span>`, "_key")}
+
+    ${renderTable("tblAdset", "🎯 群組成效", adsetRows, "廣告組合",
+      r => `<span class="cell-name">${esc(r.adset_name || "(未命名)")}</span><span class="cell-sub">${esc(r.campaign_name || "")}</span>`, "spend")}
+
+    ${renderTable("tblAd", "🖼 素材成效", adRows, "素材（廣告）",
+      r => {
+        const t = THUMBS[r.ad_name];
+        const img = t && t.thumb ? `<img class="thumb" src="${esc(t.thumb)}" loading="lazy" alt="">` : `<span class="thumb"></span>`;
+        return `<span class="thumb-cell">${img}<span><span class="cell-name">${esc(r.ad_name || "(未命名)")}</span><span class="cell-sub">${esc(r.campaign_name || "")}</span></span></span>`;
+      }, "spend", "同名素材已合併")}
+
+    <div class="charts-row">
+      <div class="chart-card" style="margin-bottom:0">
+        <h3>性別花費分布</h3>
+        <div class="chart-wrap sm"><canvas id="chartGender"></canvas></div>
+      </div>
+      <div class="chart-card" style="margin-bottom:0">
+        <h3>年齡成效</h3>
+        <div class="chart-wrap sm"><canvas id="chartAge"></canvas></div>
+      </div>
+    </div>
+    <div style="height:20px"></div>
+
+    ${renderTable("tblGender", "🚻 性別成效", genderRows, "性別",
+      r => `<span class="cell-name">${GENDER_LABEL[r._key] || r._key}</span>`, "spend")}
+
+    ${renderTable("tblAge", "🎂 年齡成效", ageRows, "年齡",
+      r => `<span class="cell-name">${esc(r._key)}</span>`, "_key")}
+  `;
+
+  drawTrend(daily);
+  if (genderRows.length) drawGender(genderRows);
+  if (ageRows.length) drawAge(ageRows);
+}
+
+// ── 啟動 ───────────────────────────────────────────────────
+buildTabs();
+(function init() {
+  const to = new Date(), from = new Date();
+  from.setDate(to.getDate() - 29);
+  document.getElementById("dateFrom").value = ymd(from);
+  document.getElementById("dateTo").value = ymd(to);
+  document.querySelectorAll(".preset-btn")[3].classList.add("active");
+  loadAll(false);
+})();
+</script>
+</body>
+</html>
