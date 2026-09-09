@@ -78,8 +78,6 @@
   .cell-sub { font-size: 11px; color: #aaa; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; margin-top: 2px; }
   .thumb-cell { display: flex; align-items: center; gap: 10px; }
   .thumb { width: 44px; height: 44px; border-radius: 6px; object-fit: cover; background: #f0f2f5; flex-shrink: 0; }
-  .spend-bar-wrap { display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
-  .spend-bar { height: 5px; border-radius: 3px; background: #e5326e; opacity: 0.5; min-width: 2px; }
 
   .empty { text-align: center; padding: 60px; color: #bbb; }
   .note { font-size: 12px; color: #999; background: #fffbe6; border: 1px solid #ffe58f; border-radius: 8px; padding: 8px 12px; margin-bottom: 16px; }
@@ -150,7 +148,7 @@ function categoryOf(name) {
 
 // ── 指標欄位定義 ─────────────────────────────────────────────
 const METRICS = [
-  { key: "spend",       label: "花費",       fmt: "money", bar: true },
+  { key: "spend",       label: "花費",       fmt: "money" },
   { key: "impressions", label: "曝光",       fmt: "int" },
   { key: "clicks",      label: "點擊(all)",  fmt: "int" },
   { key: "link_clicks", label: "連結點擊",   fmt: "int" },
@@ -346,19 +344,13 @@ function renderTable(id, title, rows, nameHeader, nameCell, defaultKey, hint, de
   if (!rows.length) return `<div class="table-card"><div class="table-header"><h3>${title}</h3></div><div class="empty">此區間沒有資料</div></div>`;
   const s = sortState[id] || (sortState[id] = { key: defaultKey, asc: !!defaultAsc });
   const sorted = sortRows(id, rows, defaultKey);
-  const maxSpend = Math.max(...rows.map(r => r.spend), 1);
   const tot = total(rows);
 
   const head = `<th class="${s.key === "_key" ? "sorted " + (s.asc ? "asc" : "") : ""}" onclick="setSort('${id}','_key')">${nameHeader}</th>` +
     METRICS.map(m => `<th class="${s.key === m.key ? "sorted " + (s.asc ? "asc" : "") : ""}" onclick="setSort('${id}','${m.key}')">${m.label}</th>`).join("");
 
-  const body = sorted.map(r => "<tr>" + `<td>${nameCell(r)}</td>` + METRICS.map(m => {
-    if (m.bar) {
-      const w = Math.round(r.spend / maxSpend * 42);
-      return `<td><span class="spend-bar-wrap"><span class="spend-bar" style="width:${w}px"></span>${fmt(r[m.key], m.fmt)}</span></td>`;
-    }
-    return `<td>${fmt(r[m.key], m.fmt)}</td>`;
-  }).join("") + "</tr>").join("");
+  const body = sorted.map(r => "<tr>" + `<td>${nameCell(r)}</td>` +
+    METRICS.map(m => `<td>${fmt(r[m.key], m.fmt)}</td>`).join("") + "</tr>").join("");
 
   const foot = "<tr><td>合計</td>" + METRICS.map(m => `<td>${fmt(tot[m.key], m.fmt)}</td>`).join("") + "</tr>";
 
