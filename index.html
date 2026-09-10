@@ -43,11 +43,6 @@
   .sc .lbl { font-size: 11px; color: #65676b; font-weight: 600; letter-spacing: 0.3px; margin-bottom: 6px; }
   .sc .val { font-size: 21px; font-weight: 700; }
   .sc .sub { font-size: 11px; color: #aaa; margin-top: 3px; }
-  .sc .delta { font-size: 12px; font-weight: 600; margin-top: 5px; }
-  .sc .delta.good { color: #52c41a; }
-  .sc .delta.bad { color: #f5222d; }
-  .sc .delta.flat { color: #aaa; font-weight: 500; }
-  .cmp-range { font-size: 12px; color: #999; margin-bottom: 10px; }
   .c-blue .val { color: #1677ff; }
   .c-orange .val { color: #fa8c16; }
   .c-purple .val { color: #722ed1; }
@@ -149,20 +144,19 @@ function categoryOf(name) {
 
 // ── 指標欄位定義 ─────────────────────────────────────────────
 const METRICS = [
-  // good：跟前期比時哪個方向算好。成本類是變低才好，花費本身無所謂好壞。
-  { key: "spend",       label: "花費",       fmt: "money", good: "flat" },
-  { key: "impressions", label: "曝光",       fmt: "int",   good: "up" },
-  { key: "clicks",      label: "點擊(all)",  fmt: "int",   good: "up" },
-  { key: "link_clicks", label: "連結點擊",   fmt: "int",   good: "up" },
-  { key: "vc",          label: "VC",         fmt: "int",   good: "up" },
-  { key: "atc",         label: "ATC",        fmt: "int",   good: "up" },
-  { key: "purchase",    label: "Purchase",   fmt: "int",   good: "up" },
-  { key: "value",       label: "Value",      fmt: "money", good: "up" },
-  { key: "cpm",         label: "CPM",        fmt: "dec2",  good: "down" },
-  { key: "cpc",         label: "CPC(all)",   fmt: "dec2",  good: "down" },
-  { key: "cpl",         label: "CPL",        fmt: "dec2",  good: "down" },
-  { key: "roas",        label: "ROAS",       fmt: "dec2",  good: "up" },
-  { key: "aov",         label: "客單價",     fmt: "money", good: "up" },
+  { key: "spend",       label: "花費",       fmt: "money" },
+  { key: "impressions", label: "曝光",       fmt: "int" },
+  { key: "clicks",      label: "點擊(all)",  fmt: "int" },
+  { key: "link_clicks", label: "連結點擊",   fmt: "int" },
+  { key: "vc",          label: "VC",         fmt: "int" },
+  { key: "atc",         label: "ATC",        fmt: "int" },
+  { key: "purchase",    label: "Purchase",   fmt: "int" },
+  { key: "value",       label: "Value",      fmt: "money" },
+  { key: "cpm",         label: "CPM",        fmt: "dec2" },
+  { key: "cpc",         label: "CPC(all)",   fmt: "dec2" },
+  { key: "cpl",         label: "CPL",        fmt: "dec2" },
+  { key: "roas",        label: "ROAS",       fmt: "dec2" },
+  { key: "aov",         label: "客單價",     fmt: "money" },
 ];
 const METRIC_BY_KEY = Object.fromEntries(METRICS.map(m => [m.key, m]));
 
@@ -257,8 +251,7 @@ const REPORTS = {
   gender: { level: "campaign", breakdowns: "gender" },
 };
 
-let DATA = { trend: [], adset: [], ad: [], age: [], gender: [], prevTrend: [] };
-let PREV_RANGE = null;
+let DATA = { trend: [], adset: [], ad: [], age: [], gender: [] };
 let THUMBS = {};
 let activeCat = "保健";
 const sortState = {};
@@ -276,29 +269,6 @@ async function fetchReport(name, since, until, force) {
   return j;
 }
 
-// 前期＝緊接在本期之前、同樣長度的區間（近7天 → 再往前推的那 7 天）
-function prevRange(since, until) {
-  const a = new Date(since + "T00:00:00"), b = new Date(until + "T00:00:00");
-  const days = Math.round((b - a) / 86400000) + 1;
-  const pUntil = new Date(a); pUntil.setDate(a.getDate() - 1);
-  const pSince = new Date(pUntil); pSince.setDate(pUntil.getDate() - (days - 1));
-  return { since: ymd(pSince), until: ymd(pUntil), days };
-}
-
-// 前期只需要總計，所以單抓 trend 一支；它不在預熱區間內，第一次會慢幾秒，
-// 之後後端就有快取了。抓完再 render 一次補上 +/-%，不擋主畫面。
-async function loadPrev(since, until, force) {
-  const p = prevRange(since, until);
-  const q = new URLSearchParams({ since: p.since, until: p.until, level: "campaign", time_increment: "1" });
-  if (force) q.set("force", "true");
-  const r = await fetch(`${API_BASE}/api/insights?${q}`);
-  const j = await r.json();
-  if (j.errors && j.errors.length) throw new Error(j.errors[0]);
-  DATA.prevTrend = j.data || [];
-  PREV_RANGE = p;
-  render();
-}
-
 async function loadAll(force) {
   const since = document.getElementById("dateFrom").value;
   const until = document.getElementById("dateTo").value;
@@ -309,10 +279,6 @@ async function loadAll(force) {
   btn.disabled = true;
   st.className = "status-text";
   st.textContent = "載入中…";
-
-  // 換區間時先把前期清掉，免得舊的 +/-% 留在畫面上
-  DATA.prevTrend = [];
-  PREV_RANGE = null;
 
   try {
     const names = Object.keys(REPORTS);
@@ -329,7 +295,6 @@ async function loadAll(force) {
       }).catch(() => {});
     }
     render();
-    loadPrev(since, until, force).catch(() => {});
   } catch (e) {
     st.className = "status-text err";
     st.textContent = "載入失敗：" + e.message;
@@ -461,22 +426,6 @@ function render() {
   const tot = total(trend);
   const daily = aggregate(trend, r => r.date_start).sort((a, b) => a._key.localeCompare(b._key));
 
-  // 前期對比：抓到才顯示，抓的時候主畫面已經先出來了
-  const prevTot = DATA.prevTrend.length ? total(inCat(DATA.prevTrend)) : null;
-
-  function deltaHtml(key) {
-    if (!prevTot) return "";
-    const m = METRIC_BY_KEY[key];
-    const cur = tot[key], prev = prevTot[key];
-    const prevTxt = `前期 ${fmt(prev, m.fmt).replace(/<[^>]*>/g, "")}`;
-    if (!prev) return cur ? `<div class="delta flat" title="${prevTxt}">前期無資料</div>` : "";
-    const pct = (cur - prev) / prev * 100;
-    if (Math.abs(pct) < 0.05) return `<div class="delta flat" title="${prevTxt}">持平</div>`;
-    const up = pct > 0;
-    const cls = m.good === "flat" ? "flat" : ((up ? "up" : "down") === m.good ? "good" : "bad");
-    return `<div class="delta ${cls}" title="${prevTxt}">${up ? "▲" : "▼"} ${Math.abs(pct).toFixed(1)}%</div>`;
-  }
-
   const cards = [
     ["spend", "c-pink", ""],
     ["impressions", "c-dark", ""],
@@ -494,7 +443,7 @@ function render() {
   ].map(([key, cls, sub]) => {
     const m = METRIC_BY_KEY[key];
     return `<div class="sc ${cls}"><div class="lbl">${m.label}</div><div class="val">${fmt(tot[key], m.fmt)}</div>` +
-      `${sub ? `<div class="sub">${sub}</div>` : ""}${deltaHtml(key)}</div>`;
+      `${sub ? `<div class="sub">${sub}</div>` : ""}</div>`;
   }).join("");
 
   const dailyRows = daily.map(d => Object.assign({}, d));
@@ -508,7 +457,6 @@ function render() {
 
   document.getElementById("main").innerHTML = `
     ${catSpend["其他"] ? `<div class="note">此區間另有未依 <b>保健_</b> / <b>家寢_</b> 命名的活動（KOL、專案等）花費 $${nf.format(Math.round(catSpend["其他"]))}，兩個分頁都沒有計入，跟帳戶總花費對帳時要注意。</div>` : ""}
-    ${PREV_RANGE ? `<div class="cmp-range">＋/－% 為與前期比較 · 前期：${PREV_RANGE.since} ~ ${PREV_RANGE.until}（${PREV_RANGE.days} 天）</div>` : ""}
     <div class="summary-grid">${cards}</div>
 
     <div class="chart-card">
